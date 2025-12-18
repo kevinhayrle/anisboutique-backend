@@ -1,4 +1,3 @@
-
 const Razorpay = require("razorpay");
 const pool = require("../db");
 const { sendOrderEmail } = require("../utils/mailer");
