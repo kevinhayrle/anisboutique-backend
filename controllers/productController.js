@@ -12,7 +12,8 @@ exports.addProduct = async (req, res) => {
     image_url,
     category,
     sizes,
-    extra_images
+    extra_images,
+    colors
   } = req.body;
 
   const normalizedSizes =
@@ -21,6 +22,14 @@ exports.addProduct = async (req, res) => {
       : typeof sizes === 'string'
       ? sizes
       : '';
+
+   const normalizedColors =
+   Array.isArray(colors)
+     ? colors.join(',')
+     : typeof colors === 'string'
+     ? colors
+     : '';
+    
 
   const normalizedExtraImages =
     Array.isArray(extra_images)
@@ -42,6 +51,7 @@ exports.addProduct = async (req, res) => {
            image_url = ?, 
            category = ?, 
            sizes = ?, 
+           colors = ?,
            discounted_price = ?, 
            sort_order = ?, 
            created_at = NOW()`,
@@ -52,6 +62,7 @@ exports.addProduct = async (req, res) => {
         image_url,
         category,
         normalizedSizes,
+        normalizedColors, 
         discounted_price,
         Number(sort_order ?? 0)
       ]
@@ -76,14 +87,22 @@ exports.addProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
   try {
-    const [rows] = await db.query(
-      'SELECT * FROM products ORDER BY sort_order ASC, created_at DESC'
+    const { color } = req.query;
 
-    );
+    let query = `
+      SELECT * FROM products
+      ${color ? 'WHERE FIND_IN_SET(?, colors)' : ''}
+      ORDER BY sort_order ASC, created_at DESC
+    `;
+
+    const params = color ? [color.toLowerCase()] : [];
+
+    const [rows] = await db.query(query, params);
 
     const products = rows.map(product => ({
       ...product,
-      sizes: product.sizes ? product.sizes.split(',') : []
+      sizes: product.sizes ? product.sizes.split(',') : [],
+      colors: product.colors ? product.colors.split(',') : [] // 🔥 ADD
     }));
 
     res.json(products);
@@ -107,6 +126,7 @@ exports.getProductById = async (req, res) => {
     }
 
     product.sizes = product.sizes ? product.sizes.split(',') : [];
+    product.colors = product.colors ? product.colors.split(',') : []; 
 
     const [images] = await db.query(
       'SELECT image_url FROM product_images WHERE product_id = ?',
@@ -134,7 +154,8 @@ exports.updateProduct = async (req, res) => {
     image_url,
     category,
     sizes,
-    extra_images
+    extra_images,
+    colors
   } = req.body;
 
   const normalizedSizes =
@@ -143,6 +164,13 @@ exports.updateProduct = async (req, res) => {
       : typeof sizes === 'string'
       ? sizes
       : '';
+
+  const normalizedColors =
+  Array.isArray(colors)
+    ? colors.join(',')
+    : typeof colors === 'string'
+    ? colors
+    : '';
 
   const normalizedExtraImages =
     Array.isArray(extra_images)
@@ -165,7 +193,8 @@ exports.updateProduct = async (req, res) => {
            sort_order = ?, 
            image_url = ?, 
            category = ?, 
-           sizes = ?
+           sizes = ?,
+           colors = ?
        WHERE id = ?`,
       [
         name,
@@ -176,6 +205,7 @@ exports.updateProduct = async (req, res) => {
         image_url,
         category,
         normalizedSizes,
+        normalizedColors,
         id
       ]
     );
