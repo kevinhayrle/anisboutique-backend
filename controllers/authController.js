@@ -2,7 +2,10 @@ const db = require('../db');
 const jwt = require('jsonwebtoken');
 const { hashPassword, comparePassword } = require('../utils/hash');
 const { sendOTPEmail } = require('../utils/mailer');
+
 const JWT_SECRET = 'your_jwt_secret_key';
+
+
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
