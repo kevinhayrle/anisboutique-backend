@@ -8,10 +8,7 @@ const app = express();
 console.log('👋 Anis Boutique backend started');
 
 const allowedOrigins = [
-  'https://anisboutique.netlify.app', 
-  'https://68889f903f02ce00084b1f46--pasheon.netlify.app',
-  'https://pasheon.com',
-  'https://www.pasheon.com',
+  'https://anisboutique.netlify.app',
   'http://127.0.0.1:5500',
   'http://localhost:5500'
 ];
