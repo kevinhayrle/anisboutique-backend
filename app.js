@@ -1,27 +1,26 @@
 const express = require('express');
 const cors = require("cors");
+const publicProductRoutes = require('./routes/publicProductRoutes');
+
 require('dotenv').config();
 
 const app = express();
 console.log('👋 Anis Boutique backend started');
 
 const allowedOrigins = [
-  'https://anisboutique.netlify.app',
+  'https://anisboutique.netlify.app', 
+  'https://68889f903f02ce00084b1f46--pasheon.netlify.app',
+  'https://pasheon.com',
+  'https://www.pasheon.com',
   'http://127.0.0.1:5500',
   'http://localhost:5500'
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true,
   methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
 }));
+
 console.log('✅ CORS configured');
 
 app.use(express.json());
@@ -29,16 +28,12 @@ console.log('✅ express.json middleware loaded');
 
 try {
   const adminRoutes = require('./routes/adminRoutes');
-  const authRoutes = require('./routes/auth');
-  const productRoutes = require('./routes/productRoutes');
   const couponRoutes = require('./routes/couponRoutes'); // ✅ ADDED
   const checkoutRoutes = require("./routes/checkoutRoutes");
   const orderRoutes = require("./routes/orderRoutes");
-
+  app.use('/api/products', publicProductRoutes);
   app.use('/api/admin', adminRoutes);
-  app.use('/api/auth', authRoutes);
-  app.use('/api/products', productRoutes);
-  app.use('/api/coupons', couponRoutes); // ✅ ADDED
+  app.use('/api/coupons', couponRoutes); 
   app.use("/api/checkout", checkoutRoutes);
   app.use("/api", orderRoutes);
   console.log('✅ Routes registered');

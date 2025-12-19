@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const verifyToken = require('../middleware/authMiddleware');
+const verifyToken = require('../middleware/adminMiddleware');
 const { adminLogin } = require('../controllers/adminAuthController');
 
 const {
@@ -8,7 +8,7 @@ const {
   deleteProduct,
   addProduct,
   updateProduct,
-  updateProductOrder     // ✅ ALREADY EXISTS IN CONTROLLER
+  updateProductOrder
 } = require('../controllers/productController');
 
 const {
@@ -18,21 +18,21 @@ const {
 } = require('../controllers/couponController');
 
 /* =======================
-   EXISTING ROUTES
+   AUTH
 ======================= */
 
 router.post('/login', adminLogin);
 
+/* =======================
+   PRODUCT ROUTES (FIXED)
+======================= */
+
 router.get('/products', verifyToken, getAllProducts);
-
-router.delete('/delete/:id', verifyToken, deleteProduct);
-
-router.post('/add', verifyToken, addProduct);
-
-router.put('/update/:id', verifyToken, updateProduct);
-
-/* ✅✅✅ MISSING ROUTE (FIX) ✅✅✅ */
+router.post('/products', verifyToken, addProduct);
 router.put('/products/reorder', verifyToken, updateProductOrder);
+router.put('/products/:id', verifyToken, updateProduct);
+router.delete('/products/:id', verifyToken, deleteProduct);
+
 
 /* =======================
    COUPON ROUTES
