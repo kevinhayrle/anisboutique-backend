@@ -7,18 +7,32 @@ POST /api/admin/coupons/add
 ================================================
 */
 exports.addCoupon = async (req, res) => {
-  const {
-    coupon_code,
-    discount_type,
-    discount_value,
-    min_cart_value,
-    max_discount,
-    expiry_date
-  } = req.body;
+const {
+  coupon_code,
+  discount_type,
+  discount_value,
+  min_cart_value,
+  max_discount,
+  expiry_date
+} = req.body;
 
-  if (!coupon_code || !discount_type || !discount_value) {
-    return res.status(400).json({ error: 'Required fields missing.' });
-  }
+// ✅ normalize values (prevents MySQL crash)
+const normalizedDiscount = Number(discount_value);
+const normalizedMinCart = Number(min_cart_value) || 0;
+const normalizedMaxDiscount =
+  max_discount !== undefined && max_discount !== ""
+    ? Number(max_discount)
+    : null;
+
+const normalizedExpiry =
+  expiry_date && expiry_date.trim() !== ""
+    ? expiry_date
+    : null;
+
+
+  if (!coupon_code || !discount_type || isNaN(normalizedDiscount)) {
+  return res.status(400).json({ error: 'Required fields missing or invalid.' });
+}
 
   try {
     await db.query(
@@ -26,13 +40,15 @@ exports.addCoupon = async (req, res) => {
        (coupon_code, discount_type, discount_value, min_cart_value, max_discount, expiry_date, is_active, created_at)
        VALUES (?, ?, ?, ?, ?, ?, 1, NOW())`,
       [
-        coupon_code,
-        discount_type,
-        discount_value,
-        min_cart_value || 0,
-        max_discount || null,
-        expiry_date || null
-      ]
+
+  coupon_code,
+  discount_type,
+  normalizedDiscount,
+  normalizedMinCart,
+  normalizedMaxDiscount,
+  normalizedExpiry
+]
+
     );
 
     res.status(201).json({ message: 'Coupon added successfully.' });
