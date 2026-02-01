@@ -1,5 +1,8 @@
 const db = require('../db');
 
+/* =====================================================
+   ADD PRODUCT
+===================================================== */
 exports.addProduct = async (req, res) => {
   console.log("REQ BODY:", req.body);
 
@@ -11,11 +14,20 @@ exports.addProduct = async (req, res) => {
     sort_order,
     image_url,
     category,
+    quantity_unit,
     sizes,
     extra_images,
     colors
   } = req.body;
 
+  /* -------- VALIDATION -------- */
+  if (!name || !price || !image_url || !category || !quantity_unit) {
+    return res.status(400).json({
+      error: 'Name, price, image, category and quantity unit are required.'
+    });
+  }
+
+  /* -------- NORMALIZATION -------- */
   const normalizedSizes =
     Array.isArray(sizes)
       ? sizes.join(',')
@@ -23,13 +35,12 @@ exports.addProduct = async (req, res) => {
       ? sizes
       : '';
 
-   const normalizedColors =
-   Array.isArray(colors)
-     ? colors.join(',')
-     : typeof colors === 'string'
-     ? colors
-     : '';
-    
+  const normalizedColors =
+    Array.isArray(colors)
+      ? colors.join(',')
+      : typeof colors === 'string'
+      ? colors
+      : '';
 
   const normalizedExtraImages =
     Array.isArray(extra_images)
@@ -38,38 +49,30 @@ exports.addProduct = async (req, res) => {
       ? extra_images.split(',').map(s => s.trim())
       : [];
 
-  if (!name || !price || !image_url) {
-    return res.status(400).json({ error: 'Name, price, and image are required.' });
-  }
-
   try {
+    /* -------- INSERT PRODUCT -------- */
     const [result] = await db.query(
-      `INSERT INTO products 
-       SET name = ?, 
-           description = ?, 
-           price = ?, 
-           image_url = ?, 
-           category = ?, 
-           sizes = ?, 
-           colors = ?,
-           discounted_price = ?, 
-           sort_order = ?, 
-           created_at = NOW()`,
+      `INSERT INTO products
+       (name, description, price, discounted_price, image_url,
+        category, quantity_unit, sizes, colors, sort_order, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
       [
         name,
-        description,
+        description || null,
         price,
+        discounted_price || null,
         image_url,
         category,
+        quantity_unit,
         normalizedSizes,
-        normalizedColors, 
-        discounted_price,
+        normalizedColors,
         Number(sort_order ?? 0)
       ]
     );
 
     const productId = result.insertId;
 
+    /* -------- EXTRA IMAGES -------- */
     if (normalizedExtraImages.length > 0) {
       const values = normalizedExtraImages.map(img => [productId, img]);
       await db.query(
@@ -85,33 +88,38 @@ exports.addProduct = async (req, res) => {
   }
 };
 
+/* =====================================================
+   GET ALL PRODUCTS (OPTIONAL COLOR FILTER)
+===================================================== */
 exports.getAllProducts = async (req, res) => {
   try {
     const { color } = req.query;
 
-    let query = `
+    const query = `
       SELECT * FROM products
       ${color ? 'WHERE FIND_IN_SET(?, colors)' : ''}
       ORDER BY sort_order ASC, created_at DESC
     `;
 
     const params = color ? [color.toLowerCase()] : [];
-
     const [rows] = await db.query(query, params);
 
     const products = rows.map(product => ({
       ...product,
       sizes: product.sizes ? product.sizes.split(',') : [],
-      colors: product.colors ? product.colors.split(',') : [] // 🔥 ADD
+      colors: product.colors ? product.colors.split(',') : []
     }));
 
     res.json(products);
   } catch (err) {
-    console.error('Error fetching products:', err.message);
+    console.error('Error fetching products:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 };
 
+/* =====================================================
+   GET PRODUCT BY ID
+===================================================== */
 exports.getProductById = async (req, res) => {
   const { id } = req.params;
 
@@ -126,7 +134,7 @@ exports.getProductById = async (req, res) => {
     }
 
     product.sizes = product.sizes ? product.sizes.split(',') : [];
-    product.colors = product.colors ? product.colors.split(',') : []; 
+    product.colors = product.colors ? product.colors.split(',') : [];
 
     const [images] = await db.query(
       'SELECT image_url FROM product_images WHERE product_id = ?',
@@ -137,11 +145,14 @@ exports.getProductById = async (req, res) => {
 
     res.json(product);
   } catch (err) {
-    console.error('Error fetching product by ID:', err);
+    console.error('Error fetching product:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 };
 
+/* =====================================================
+   UPDATE PRODUCT
+===================================================== */
 exports.updateProduct = async (req, res) => {
   const { id } = req.params;
 
@@ -153,10 +164,15 @@ exports.updateProduct = async (req, res) => {
     sort_order,
     image_url,
     category,
+    quantity_unit,
     sizes,
     extra_images,
     colors
   } = req.body;
+
+  if (!id || !name || !price || !image_url || !category || !quantity_unit) {
+    return res.status(400).json({ error: 'All required fields missing.' });
+  }
 
   const normalizedSizes =
     Array.isArray(sizes)
@@ -166,11 +182,11 @@ exports.updateProduct = async (req, res) => {
       : '';
 
   const normalizedColors =
-  Array.isArray(colors)
-    ? colors.join(',')
-    : typeof colors === 'string'
-    ? colors
-    : '';
+    Array.isArray(colors)
+      ? colors.join(',')
+      : typeof colors === 'string'
+      ? colors
+      : '';
 
   const normalizedExtraImages =
     Array.isArray(extra_images)
@@ -179,37 +195,29 @@ exports.updateProduct = async (req, res) => {
       ? extra_images.split(',').map(s => s.trim())
       : [];
 
-  if (!id || !name || !price || !image_url || !category) {
-    return res.status(400).json({ error: 'All fields are required.' });
-  }
-
   try {
     await db.query(
-      `UPDATE products 
-       SET name = ?, 
-           description = ?, 
-           price = ?, 
-           discounted_price = ?, 
-           sort_order = ?, 
-           image_url = ?, 
-           category = ?, 
-           sizes = ?,
-           colors = ?
+      `UPDATE products
+       SET name = ?, description = ?, price = ?, discounted_price = ?,
+           image_url = ?, category = ?, quantity_unit = ?,
+           sizes = ?, colors = ?, sort_order = ?
        WHERE id = ?`,
       [
         name,
-        description,
+        description || null,
         price,
-        discounted_price,
-        Number(sort_order ?? 0),
+        discounted_price || null,
         image_url,
         category,
+        quantity_unit,
         normalizedSizes,
         normalizedColors,
+        Number(sort_order ?? 0),
         id
       ]
     );
 
+    /* RESET EXTRA IMAGES */
     await db.query('DELETE FROM product_images WHERE product_id = ?', [id]);
 
     if (normalizedExtraImages.length > 0) {
@@ -227,16 +235,9 @@ exports.updateProduct = async (req, res) => {
   }
 };
 
-exports.getAllCategories = async (req, res) => {
-  try {
-    const [rows] = await db.query('SELECT DISTINCT category FROM products');
-    res.json(rows.map(row => row.category));
-  } catch (err) {
-    console.error('Error fetching categories:', err);
-    res.status(500).json({ error: 'Failed to fetch categories' });
-  }
-};
-
+/* =====================================================
+   DELETE PRODUCT
+===================================================== */
 exports.deleteProduct = async (req, res) => {
   const { id } = req.params;
 
@@ -255,26 +256,42 @@ exports.deleteProduct = async (req, res) => {
   }
 };
 
+/* =====================================================
+   GET ALL CATEGORIES
+===================================================== */
+exports.getAllCategories = async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT DISTINCT category FROM products');
+    res.json(rows.map(row => row.category));
+  } catch (err) {
+    console.error('Error fetching categories:', err);
+    res.status(500).json({ error: 'Failed to fetch categories.' });
+  }
+};
+
+/* =====================================================
+   UPDATE PRODUCT ORDER (DRAG & DROP)
+===================================================== */
 exports.updateProductOrder = async (req, res) => {
   const order = req.body;
 
   if (!Array.isArray(order)) {
-    return res.status(400).json({ error: "Invalid order data" });
+    return res.status(400).json({ error: 'Invalid order data.' });
   }
 
   try {
     await Promise.all(
       order.map(item =>
-  db.query(
-    "UPDATE products SET sort_order = ? WHERE id = ?",
-    [Number(item.sort_order), Number(item.id)]
-  )
-)
+        db.query(
+          'UPDATE products SET sort_order = ? WHERE id = ?',
+          [Number(item.sort_order), Number(item.id)]
+        )
+      )
     );
 
-    res.json({ message: "Product order updated successfully" });
+    res.json({ message: 'Product order updated successfully.' });
   } catch (err) {
-    console.error("Error updating product order:", err);
-    res.status(500).json({ error: "Failed to update order" });
+    console.error('Error updating product order:', err);
+    res.status(500).json({ error: 'Failed to update order.' });
   }
 };

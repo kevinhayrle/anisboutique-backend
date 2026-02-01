@@ -1,67 +1,139 @@
-
 const Razorpay = require("razorpay");
-const pool = require("../db");
+const db = require("../db");
 const { sendOrderEmail } = require("../utils/mailer");
-
 require("dotenv").config();
 
+/* =====================================================
+   RAZORPAY INSTANCE
+===================================================== */
 const razorpayInstance = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
+/* =====================================================
+   CREATE RAZORPAY ORDER
+   POST /api/payment/create-order
+===================================================== */
 exports.createRazorpayOrder = async (req, res) => {
   try {
     const { total_amount } = req.body;
 
-    if (!total_amount || total_amount < 100) {
-      return res.status(400).json({ message: "Invalid amount." });
+    if (!total_amount || isNaN(total_amount) || total_amount < 100) {
+      return res.status(400).json({
+        error: "Invalid amount. Minimum ₹1 required."
+      });
     }
 
     const options = {
-      amount: total_amount, 
+      amount: Math.round(total_amount), // amount in paise
       currency: "INR",
-      receipt: "receipt_order_" + new Date().getTime(),
-      payment_capture: 1, 
+      receipt: `receipt_${Date.now()}`,
+      payment_capture: 1
     };
 
     const order = await razorpayInstance.orders.create(options);
+
     res.json(order);
-  } catch (error) {
-    console.error("Error in createOrder:", error);
-    res.status(500).json({ message: "Failed to create Razorpay order" });
+  } catch (err) {
+    console.error("Error creating Razorpay order:", err);
+    res.status(500).json({
+      error: "Failed to create Razorpay order"
+    });
   }
 };
 
+/* =====================================================
+   HANDLE CHECKOUT (SAVE ORDER)
+   POST /api/checkout
+===================================================== */
 exports.handleCheckout = async (req, res) => {
   try {
-    const { name, email, phone, address, cart, payment, total_amount } = req.body;
+    const {
+      name,
+      email,
+      phone,
+      address,
+      cart,
+      payment,
+      total_amount
+    } = req.body;
 
-    if (!payment || !cart || cart.length === 0) {
-      return res.status(400).json({ message: "Missing payment or cart info" });
+    /* ---------- BASIC VALIDATION ---------- */
+    if (
+      !name ||
+      !email ||
+      !phone ||
+      !address ||
+      !payment ||
+      !Array.isArray(cart) ||
+      cart.length === 0 ||
+      !total_amount
+    ) {
+      return res.status(400).json({
+        error: "Missing required checkout details."
+      });
     }
 
-    const [orderResult] = await pool.query(
-      `INSERT INTO orders (name, email, phone, address, payment, total_amount) VALUES (?, ?, ?, ?, ?, ?)`,
+    /* ---------- CREATE ORDER ---------- */
+    const [orderResult] = await db.query(
+      `INSERT INTO orders
+       (name, email, phone, address, payment, total_amount, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
       [name, email, phone, address, payment, total_amount]
     );
 
     const orderId = orderResult.insertId;
 
-    const orderItemsPromises = cart.map((item) => {
-      return pool.query(
-        `INSERT INTO order_items (order_id, product_id, size, quantity, price) VALUES (?, ?, ?, ?, ?)`,
-        [orderId, item.id, item.size, item.quantity, item.price]
+    /* ---------- INSERT ORDER ITEMS ---------- */
+    const orderItemsQueries = cart.map(item => {
+      if (!item.id || !item.quantity || !item.price) {
+        throw new Error("Invalid cart item");
+      }
+
+      return db.query(
+        `INSERT INTO order_items
+         (order_id, product_id, size, quantity, price)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          orderId,
+          item.id,
+          item.size || null,
+          item.quantity,
+          item.price
+        ]
       );
     });
 
-    await Promise.all(orderItemsPromises);
+    await Promise.all(orderItemsQueries);
 
-    await sendOrderEmail({ name, email, phone, address, cart, payment, total_amount });
+    /* ---------- SEND EMAIL ---------- */
+    try {
+      await sendOrderEmail({
+        name,
+        email,
+        phone,
+        address,
+        cart,
+        payment,
+        total_amount,
+        orderId
+      });
+    } catch (mailErr) {
+      console.error("Order placed but email failed:", mailErr);
+      // Email failure should NOT block order success
+    }
 
-    res.status(200).json({ message: "Order placed successfully" });
-  } catch (error) {
-    console.error("Error in handleCheckout:", error);
-    res.status(500).json({ message: "Failed to process order" });
+    res.status(200).json({
+      success: true,
+      message: "Order placed successfully",
+      order_id: orderId
+    });
+
+  } catch (err) {
+    console.error("Error during checkout:", err);
+    res.status(500).json({
+      error: "Failed to process order"
+    });
   }
 };
