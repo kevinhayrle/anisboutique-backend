@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require("cors");
-const publicProductRoutes = require('./routes/publicProductRoutes');
+const productRoutes = require('./routes/productRoutes');
 
 require('dotenv').config();
 
@@ -28,7 +28,7 @@ try {
   const couponRoutes = require('./routes/couponRoutes'); // ✅ ADDED
   const checkoutRoutes = require("./routes/checkoutRoutes");
   const orderRoutes = require("./routes/orderRoutes");
-  app.use('/api/products', publicProductRoutes);
+  app.use('/api/products', productRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/coupons', couponRoutes); 
   app.use("/api/checkout", checkoutRoutes);
@@ -39,7 +39,7 @@ try {
 }
 
 app.get('/', (req, res) => {
-  res.send('Pasheon backend is running ✅');
+  res.send('Anis Boutique backend is running ✅');
 });
 
 const PORT = process.env.PORT;
